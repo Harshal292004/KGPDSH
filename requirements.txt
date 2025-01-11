@@ -5,7 +5,6 @@ langchain_groq
 langchain-community
 langchain-huggingface
 pypdf
-python_dotenv
 pymongo[srv]
 reportlab
 pandas
