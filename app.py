@@ -1,245 +1,106 @@
-import streamlit as st
-import time
-from langchain.prompts.chat import ChatPromptTemplate
-from langchain_groq import ChatGroq
-from langchain.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-import json
-import os
 import tempfile
+import pandas as pd
+import time 
+import streamlit as st
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from pymongo import MongoClient
-
-# Streamlit UI
-st.set_page_config(page_title="Paper Evaluation", page_icon="📜", layout="wide")
-
-st.sidebar.title("Navigation")
-groq_api_key = st.sidebar.text_input("Enter Groq API Key:", type="password")
-
-if not groq_api_key:
-    st.sidebar.warning("Please enter your Groq API Key to proceed.")
-    st.stop()
+from io import BytesIO
+from Utility import ModelManager, PaperEvaluation
+from System import SystemSTORM, SystemClassification
+from ThemesAndContext import ThemesAndContext
 
 # MongoDB connection
-MONGO_URI = st.secrets["MONGO_URI"]  # Store the URI securely in Streamlit Secrets
-client = MongoClient(MONGO_URI)
-db = client["paper_evaluations"]  # Replace with your database name
-collection = db["paper_evaluations"]  # Replace with your collection name
+try:
+    MONGO_URI = st.secrets["MONGO_URI"] 
+    client = MongoClient(MONGO_URI)
+    db = client["paper_evaluations"]  
+    collection = db["paper_evaluations"] 
+except Exception as e:
+    st.error("Failed to connect to database. Please try again later.")
 
-def save_evaluation(paper_id, publishable, justification, conference_rationale):
+def generate_pdf(evaluation):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
+    
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=30,
+        alignment=1
+    )
+    
+    elements.append(Paragraph("Paper Evaluation Report", title_style))
+    elements.append(Spacer(1, 20))
+    
+    sections = [
+        ("Research Significance", evaluation.significance),
+        ("Methodology Assessment", evaluation.methodology),
+        ("Presentation Quality", evaluation.presentation),
+        ("Major Strengths", evaluation.major_strengths),
+        ("Major Weaknesses", evaluation.major_weaknesses),
+        ("Score Justification", evaluation.justification),
+        ("Detailed Feedback", evaluation.detailed_feedback)
+    ]
+    
+    for title, content in sections:
+        elements.append(Paragraph(title, styles['Heading2']))
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph(content, styles['Normal']))
+        elements.append(Spacer(1, 20))
+    
+    scores_data = [
+        ['Metric', 'Score'],
+        ['Confidence Score', str(evaluation.confidence_score)],
+        ['Paper Score', str(evaluation.score)],
+        ['Publishable', 'Yes' if evaluation.publishable else 'No']
+    ]
+    
+    scores_table = Table(scores_data, colWidths=[200, 100])
+    scores_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    
+    elements.append(Paragraph("Scores Summary", styles['Heading2']))
+    elements.append(Spacer(1, 12))
+    elements.append(scores_table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+def create_report_of_paper(output_model: PaperEvaluation) -> str:
+    return " ".join([output_model.significance, output_model.methodology, 
+                    output_model.presentation, output_model.justification,
+                    output_model.major_strengths, output_model.major_weaknesses,
+                    output_model.detailed_feedback])
+
+def save_evaluation(paper_id, publishable, conference, justification, conference_rationale):
     document = {
         "paper_id": paper_id,
         "publishable": publishable,
+        "conference": conference,
         "justification": justification,
         "conference_rationale": conference_rationale
     }
     collection.insert_one(document)
     st.success("Evaluation saved successfully!")
 
-# Initialize LangChain components
-chat_model = ChatGroq(model="llama3-8b-8192", groq_api_key=groq_api_key)
+# Page configuration
+st.set_page_config(page_title="Paper Evaluation", page_icon="📜", layout="wide")
 
-class PublishabilityEvaluator:
-    def __init__(self, chat_model: ChatGroq, publishable_retriever, not_publishable_retriever, example_publishable, example_not_publishable):
-        """
-        Initialize the evaluator with LLM and retrievers for publishable and not-publishable examples.
-        """
-        self.chat_model = chat_model
-        self.publishable_retriever = publishable_retriever
-        self.not_publishable_retriever = not_publishable_retriever
-        self.example_publishable = example_publishable
-        self.example_not_publishable = example_not_publishable
-
-    def evaluate_publishability(self, paper_text: str) -> dict:
-        """
-        Evaluate the publishability of a research paper using chunking and example-based classification.
-        """
-        # Prepare the examples
-        prompt = f"""
-        You will be given a research paper, and your task is to classify it as "Publishable" or "Not Publishable".
-        For reference, I have provided two examples:
-
-        1. Publishable Paper:
-        {self.example_publishable}
-
-        2. Not Publishable Paper:
-        {self.example_not_publishable}
-
-        Criteria for classification:
-        - Methodology clarity: Is the methodology well-defined and replicable?
-        - Coherence: Does the paper follow a logical structure?
-        - Validity: Are the results justified with evidence?
-
-        Now, analyze the following research paper and provide your classification along with a brief justification.
-        """
-
-        # Chunk the input paper
-        chunks = self.chunk_text(paper_text)
-        chunk_results = []  # To collect classification and justification per chunk
-
-        for chunk in chunks:
-            context = f"{prompt}\n\nResearch Paper:\n{chunk}"
-            try:
-                response = self.chat_model.invoke(context)
-                print("Response:", response)
-
-                # Extract classification and justification
-                classification = "Publishable" if "Classification: Publishable" in response.content else "Not Publishable"
-                justification = response.content  # Assuming full content includes justification
-
-                chunk_results.append({
-                    "chunk_text": chunk,
-                    "classification": classification,
-                    "justification": justification,
-                })
-            except Exception as e:
-                print(f"Error processing chunk: {e}")
-
-        return {
-            "chunk_results": chunk_results,
-        }
-
-    def summarize_in_batches(self, chunk_results: list, batch_size: int = 5) -> dict:
-        """
-        Summarize chunk results in batches to handle context length limits.
-        """
-        summaries = []
-        for i in range(0, len(chunk_results), batch_size):
-            batch = chunk_results[i:i + batch_size]
-            batch_prompt = f"""
-            You are analyzing a batch of research paper evaluations. Each chunk has been classified as
-            "Publishable" or "Not Publishable" with a justification. Summarize the justifications for this batch
-            and provide a batch-level conclusion.
-    
-            Batch Evaluations:
-            {json.dumps(batch, indent=2)}
-
-            Respond with:
-            - Batch Summary: A summary of the justifications for this batch.
-            - Publishable Count: The number of chunks classified as Publishable in this batch.
-            - Not Publishable Count: The number of chunks classified as Not Publishable in this batch.
-            """
-
-            response = self.chat_model.invoke(batch_prompt)
-            try:
-                result = json.loads(response.content)
-                summaries.append(result)
-            except json.JSONDecodeError:
-                summaries.append({"batch_summary": response.content, "publishable_count": 0, "not_publishable_count": 0})
-
-        # Combine all summaries into a final prompt
-        combined_prompt = f"""
-        You have received summaries of multiple batches of research paper evaluations. Combine these summaries into
-        a final 500-word summary. Also calculate the total Publishable and Not Publishable counts across all batches
-        and determine the final classification.
-
-        Batch Summaries:
-        {json.dumps(summaries, indent=2)}
-
-        Respond with:
-        - Final Summary: A 500-word summary combining all batch summaries.
-        - Total Publishable Count: The total number of Publishable classifications.
-        - Total Not Publishable Count: The total number of Not Publishable classifications.
-        - Final Classification: "Publishable" or "Not Publishable" based on the higher count.
-        """
-        response = self.chat_model.invoke(combined_prompt)
-        print(response)
-        try:
-            return json.loads(response.content)
-        except json.JSONDecodeError:
-            return {"final_summary": response.content, "final_classification": "Error"}
-
-
-    @staticmethod
-    def chunk_text(text, max_chunk_size=1500):
-        """
-        Split text into manageable chunks for processing.
-        """
-        return [text[i:i + max_chunk_size] for i in range(0, len(text), max_chunk_size)]
-
-
-# Loading and Chunking the Paper
-    def load_and_chunk_paper(file_path: str, chunk_size: int = 500, overlap: int = 50) -> str:
-            """Load a research paper and split it into manageable chunks."""
-            loader = PyPDFLoader(file_path)
-            pages = loader.load()
-            full_text = " ".join([page.page_content for page in pages])
-            splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
-            chunks = splitter.split_text(full_text)
-            return " ".join(chunks)  # Combine chunks for processing
-
-    def recursively_get_pdf_files(directory):
-        pdf_files = []
-        try:
-            if os.path.isfile(directory) and directory.endswith('.pdf'):
-                pdf_files.append(directory)
-            elif os.path.isdir(directory):
-                for file in os.listdir(directory):
-                    full_path = os.path.join(directory, file)
-                    pdf_files.extend(PublishabilityEvaluator.recursively_get_pdf_files(full_path))
-        except Exception as e:
-            print(f"Error accessing {directory}: {e}")
-        return pdf_files
-
-    def load_docs(list_of_pdf_paths):
-        document_list=[]
-        for pdf_path in list_of_pdf_paths:
-          loader = PyPDFLoader(pdf_path)
-          document_list.append(loader.load())
-        return document_list
-
-class ConferenceAgent:
-    def __init__(self, name, chat_model, target_conference, conference_themes, conference_context):
-        self.name = name
-        self.chat_model = chat_model
-        self.target_conference = target_conference
-        self.conference_themes = conference_themes
-        self.conference_context = conference_context
-
-    def evaluate_paper(self, paper_summary):
-        prompt = ChatPromptTemplate.from_template(
-            """
-            You are a representative of {target_conference}. Evaluate the paper for relevance, methodology, and novelty based on the following themes:
-            {themes}
-
-            Paper Summary:
-            {summary}
-
-            Provide a score (0-10) and a justification for your decision in JSON format.
-            """
-        )
-        response = self.chat_model.generate(
-            prompt.format_prompt(
-                target_conference=self.target_conference,
-                themes=self.conference_themes,
-                summary=paper_summary
-            ).to_messages()
-        )
-        try:
-            return json.loads(response.content)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse response: {response.content}") from e
-
-class STORMSystem:
-    def __init__(self, agents):
-        self.agents = agents
-
-    def discuss_and_decide(self, paper_summary):
-        evaluations = []
-        for agent in self.agents:
-            evaluation = agent.evaluate_paper(paper_summary)
-            evaluations.append({
-                "conference": agent.target_conference,
-                "score": evaluation["score"],
-                "justification": evaluation["justification"],
-            })
-
-        best_conference = max(evaluations, key=lambda x: x["score"])
-        return {
-            "best_conference": best_conference["conference"],
-            "justification": best_conference["justification"],
-        }
-
-# CSS for Animations
+# Custom CSS
 st.markdown(
     """
     <style>
@@ -247,12 +108,6 @@ st.markdown(
         from { opacity: 0; transform: translateY(-20px); }
         to { opacity: 1; transform: translateY(0); }
     }
-
-    @keyframes slideUp {
-        from { opacity: 0; transform: translateY(50px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
     .fade-in {
         animation: fadeIn 2s ease-in-out;
         font-size: 2.5rem;
@@ -260,134 +115,161 @@ st.markdown(
         text-align: center;
         color: #4CAF50;
     }
-
-    .slide-up {
-        animation: slideUp 1.5s ease-in-out;
-        margin-top: 20px;
-        text-align: center;
-    }
-
-    .button {
-        animation: fadeIn 1.5s ease-in;
-        display: inline-block;
-        padding: 10px 20px;
-        font-size: 1.2rem;
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    }
-
-    .button:hover {
-        background-color: #45a049;
-    }
-
-    .footer {
-        animation: slideUp 1.5s ease-in-out;
-        margin-top: 50px;
-        text-align: center;
-        color: #888;
-    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Sidebar Navigation
+# Main title
+st.markdown('<div class="fade-in">Paper Evaluation System 📜</div>', unsafe_allow_html=True)
+st.markdown("---")
 
-options = st.sidebar.radio("Choose an action:", ["Home", "Evaluate Publishability", "Determine Best Conference"])
+# API Key handling in sidebar
+st.sidebar.title("API Configuration")
+groq_api_key = st.sidebar.text_input("Enter Groq API key:", type="password")
+fallback_api_key = st.secrets.get('GROQ_API_KEY')
 
-if options == "Home":
-    st.markdown('<div class="fade-in">Welcome to the Paper Evaluation System! 📜</div>', unsafe_allow_html=True)
-    st.markdown(
-        """<div class="slide-up">This system evaluates research papers for publishability and determines the best conference for publishing.</div>""",
-        unsafe_allow_html=True
-    )
-
-elif options == "Evaluate Publishability":
-    st.success("Please provide a file size of less than 100 KB")
-    st.title("Tumhare baap ka LLM nahi hai ki 100 KB ke upar ki file daloge")
-    st.title("📋 Publishability Evaluation")
-    uploaded_file = st.file_uploader("Upload your research paper (PDF):", type="pdf", help="Limit 100 kb per file", )
-
-    with st.expander("Additional Options"):
-        strictness_level = st.radio("Select Strictness Level for Evaluation:", ["Easy", "Medium", "Normal", "Brutal"], index=1)
-
-    if uploaded_file:
-        st.info("Processing your file. Please wait...")
-
-        # Save the uploaded file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(uploaded_file.read())
-            temp_file_path = temp_file.name
-
-        # Extract text from PDF
-        loader = PyPDFLoader(temp_file_path)
-        paper_text = " ".join([page.page_content for page in loader.load()])
-
-        # Evaluate publishability
-        evaluator = PublishabilityEvaluator(chat_model)
-        evaluation = evaluator.evaluate_publishability(paper_text)
-
-        publishable = evaluation['chunk_results'][0]['classification'] == "Publishable"
-        justification = evaluation['chunk_results'][0]['justification']
-
-        save_evaluation(publishable, justification)
-
-        st.markdown("### Publishability Result")
-        st.write(f"**Publishable:** {evaluation['publishable']}")
-        st.write(f"**Methodology Score:** {evaluation['methodology_score']}")
-        st.write(f"**Coherence Score:** {evaluation['coherence_score']}")
-        st.write(f"**Validity Score:** {evaluation['validity_score']}")
-        st.write(f"**Justification:** {evaluation['justification']}\n")
-
-    
-        if evaluation['publishable']:
-            st.session_state["publishable"] = True
-            st.session_state["paper_summary"] = evaluation["summary"]
-        else:
-            st.session_state["publishable"] = False
-
-elif options == "Determine Best Conference":
-    st.title("🌟 Best Conference Determination")
-
-    if st.session_state.get("publishable"):
-        summary = st.session_state.get("paper_summary", "")
-        st.markdown("### Paper Summary")
-        st.text_area("Summary:", value=summary, height=200, disabled=True)
-
-        if st.button("Determine Best Conference", key="determine"):
-            st.info("Evaluating the best conference. Please wait...")
-
-            agents = [
-                ConferenceAgent(
-                    name="Agent CVPR",
-                    chat_model=chat_model,
-                    target_conference="CVPR",
-                    conference_themes="Computer Vision, Pattern Recognition",
-                    conference_context="Focus on image processing and deep learning."
-                ),
-                ConferenceAgent(
-                    name="Agent NeurIPS",
-                    chat_model=chat_model,
-                    target_conference="NeurIPS",
-                    conference_themes="Machine Learning, AI, Neural Networks",
-                    conference_context="Focus on theoretical and applied ML research."
-                )
-            ]
-
-            storm = STORMSystem(agents)
-            decision = storm.discuss_and_decide(summary)
-
-            st.markdown(f'<div class="slide-up">The best conference for this paper is: <b>{decision["best_conference"]}</b></div>', unsafe_allow_html=True)
-            st.markdown(f"<div class='slide-up'><b>Justification:</b> {decision['justification']}</div>", unsafe_allow_html=True)
+if not groq_api_key:
+    if fallback_api_key:    
+        groq_api_key = fallback_api_key
+        st.sidebar.info("Using the fallback API Key.")
+        st.sidebar.warning("This may cause rate limiting issues")
     else:
-        st.warning("Please evaluate the paper's publishability first.")
+        st.sidebar.warning("Please enter your Groq API Key to proceed.")
 
-# Footer
-st.markdown(
-    """<div class="footer">Made with ❤️ for Research Evaluation</div>""",
-    unsafe_allow_html=True
+# Initialize LLM and systems
+llm = ModelManager.get_groq_llm(model_name="llama-3.1-8b-instant", api_key=groq_api_key)
+
+classification_system = SystemClassification(
+    llm=llm,
+    debug=True
 )
 
+conference_system = SystemSTORM(
+    llm=llm,
+    cvpr_theme=ThemesAndContext.cvpr_theme(),
+    cvpr_context=ThemesAndContext.cvpr_context(),
+    neur_ips_theme=ThemesAndContext.neur_ips_theme(),
+    neur_ips_context=ThemesAndContext.neur_ips_context(),
+    emnlp_theme=ThemesAndContext.emnlp_theme(),
+    emnlp_context=ThemesAndContext.emnlp_context(),
+    kdd_theme=ThemesAndContext.kdd_theme(),
+    kdd_context=ThemesAndContext.kdd_context(),
+    tmlr_theme=ThemesAndContext.tmlr_theme(),
+    tmlr_context=ThemesAndContext.tmlr_context(),
+    daa_theme=ThemesAndContext.daa_theme(),
+    daa_context=ThemesAndContext.daa_context(),
+    wait_time=10,
+    debug=True
+)
+
+# Main upload section
+st.write("Please upload a file size of less than 150 KB")
+uploaded_file = st.file_uploader("Upload your research paper (PDF):", type="pdf")
+
+with st.expander("Additional Options"):
+    process_without_stop_words = st.checkbox("Process Without Stop Words")
+
+if process_without_stop_words:
+    st.warning("Processing without stop words might degrade the performance.")
+    
+classification_system.split_pdf_without_stop_words = process_without_stop_words
+
+if uploaded_file:
+    if uploaded_file.size > 150 * 1024:  
+        st.warning("File size exceeds the limit of 150 KB. This may take up to 50 minutes to process")
+    
+    if st.button("Process Paper"):
+        with st.spinner("Processing your paper. This may take 20-55 minutes. Please don't close the browser window."):
+            # Save uploaded file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                temp_file.write(uploaded_file.read())
+                temp_file_path = temp_file.name
+                
+                # Extract paper ID
+                paper_id = uploaded_file.name[:4]
+                
+                # Process paper
+                output_model = classification_system.classify_paper(path_to_pdf=temp_file_path)
+                
+                if output_model:
+                    # Create report summary
+                    report_summary = create_report_of_paper(output_model)
+                    
+                    st.header("Evaluation Results")
+                    
+                    # Download buttons
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        pdf_buffer = generate_pdf(output_model)
+                        st.download_button("Download PDF", pdf_buffer, "evaluation_report.pdf", "application/pdf")
+                    with col2:
+                        st.download_button("Download JSON", output_model.model_dump_json(indent=2), "evaluation_report.json")
+                    with col3:
+                        df = pd.DataFrame([output_model.model_dump()]).transpose()
+                        df.columns = ['Value']
+                        st.download_button("Download CSV", df.to_csv(), "evaluation_report.csv")
+                    
+                    # Display evaluation details
+                    st.subheader("Research Significance")
+                    st.write(output_model.significance)
+                    
+                    st.subheader("Methodology Assessment")
+                    st.write(output_model.methodology)
+                    
+                    st.subheader("Presentation Quality")
+                    st.write(output_model.presentation)
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Confidence Score", output_model.confidence_score)
+                    with col2:
+                        st.metric("Paper Score", output_model.score)
+                    
+                    st.subheader("Major Strengths")
+                    st.write(output_model.major_strengths)
+                    
+                    st.subheader("Major Weaknesses")
+                    st.write(output_model.major_weaknesses)
+                    
+                    st.subheader("Score Justification")
+                    st.write(output_model.justification)
+                    
+                    st.subheader("Detailed Feedback")
+                    st.write(output_model.detailed_feedback)
+                    
+                    st.subheader("Publication Recommendation")
+                    st.write("✅ Publishable" if output_model.publishable else "❌ Not Publishable")
+                    
+                    # Save initial evaluation
+                    if not output_model.publishable:
+                        save_evaluation(paper_id, False, "", output_model.justification, "")
+                    
+                    # Process conference recommendation if publishable
+                    if output_model.publishable:
+                        st.markdown("---")
+                        st.title("Conference Recommendation")
+                        
+                        with st.spinner("Evaluating the best conference. Please wait..."):
+                            conference_decision = conference_system.discuss_and_decide(report_of_paper=report_summary)
+                            
+                            if conference_decision:
+                                save_evaluation(
+                                    paper_id,
+                                    True,
+                                    conference_decision["conference"],
+                                    output_model.justification,
+                                    conference_decision["justification"]
+                                )
+                                
+                                st.header("Recommended Conference")
+                                st.subheader("Conference")
+                                st.write(conference_decision["conference"])
+                                st.subheader("Confidence Score")
+                                st.write(conference_decision["score"])
+                                st.subheader("Justification")
+                                st.write(conference_decision["justification"])
+
+# Footer
+st.markdown("---")
+st.markdown("<div style='text-align: center; color: #888;'>Made with ❤️ by Team HACKTIVATE</div>", unsafe_allow_html=True)
