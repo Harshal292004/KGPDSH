@@ -232,6 +232,8 @@ class SystemClassification:
             detailed_feedback=" ".join(model.detailed_feedback for model in paper_evaluation_model_list),
             publishable=final_publishable_result
         )
+        if final_paper_evaluation.score<7:
+            final_paper_evaluation.publishable=False
 
         if self.debug:
           self.logger.success("Final output derived successfully.")
