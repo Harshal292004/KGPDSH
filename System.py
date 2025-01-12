@@ -232,7 +232,7 @@ class SystemClassification:
             detailed_feedback=" ".join(model.detailed_feedback for model in paper_evaluation_model_list),
             publishable=final_publishable_result
         )
-        if final_paper_evaluation.score<7:
+        if final_paper_evaluation.score<6.5:
             final_paper_evaluation.publishable=False
 
         if self.debug:
