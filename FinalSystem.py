@@ -86,8 +86,8 @@ def process_papers(api_key, paper_locations):
         output_model = classification_system.classify_paper(path_to_pdf=paper_path)
         report_summary = create_report_of_paper(output_model)
         
-        paper_id=paper_path[-8]
-        paper_id=paper_id[0:4]
+        paper_id = paper_path[-8:]
+        paper_id= paper_id[0:4]    
         if not output_model.publishable:
             save_evaluation(paper_id, False, "", output_model.justification, "")
             print("Evaluation Saved Successfully with not publishable")
