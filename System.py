@@ -194,8 +194,6 @@ class SystemClassification:
 
       try:
         total_chunks = len(paper_evaluation_model_list)
-        publishable_result = 0
-        non_publishable_result = 0
         final_publishable_result = False
         final_average_score = 0
         final_average_confidence = 0
@@ -208,17 +206,15 @@ class SystemClassification:
           final_average_score += model.score
           final_average_confidence += model.confidence_score
 
-          if model.publishable:
-              publishable_result += 1
 
-          else:
-              non_publishable_result += 1
-
-        if publishable_result > non_publishable_result:
-            final_publishable_result = True
 
         final_average_score /= total_chunks
         final_average_confidence /= total_chunks
+        
+        if final_paper_evaluation.score<6:
+            final_paper_publishable_result=False
+        else:
+            final_paper_publishable_result=True 
 
         final_paper_evaluation = PaperEvaluation(
             significance=" ".join(model.significance for model in paper_evaluation_model_list),
@@ -232,9 +228,7 @@ class SystemClassification:
             detailed_feedback=" ".join(model.detailed_feedback for model in paper_evaluation_model_list),
             publishable=final_publishable_result
         )
-        if final_paper_evaluation.score<6:
-            final_paper_evaluation.publishable=False
-
+        
         if self.debug:
           self.logger.success("Final output derived successfully.")
 
