@@ -56,9 +56,9 @@ class PDFSplitter:
           splitter= self.recursive_text_splitter
           split_documents = splitter.split_documents(pdf_pages)
           
-          if len(split_documents)>54:  
+          if len(split_documents)> 54:  
             split_documents = [doc for i, doc in enumerate(split_documents) if i % 2 == 0]
-
+            
           return split_documents
       
         except Exception as e:

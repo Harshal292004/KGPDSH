@@ -13,8 +13,8 @@ from System import SystemSTORM, SystemClassification
 from ThemesAndContext import ThemesAndContext
 
 # MongoDB connection
+MONGO_URI = "mongodb+srv://malaniharshal95:1h2a3r4s@hactivate.dnymy.mongodb.net/?retryWrites=true&w=majority&appName=Hactivate"  
 try:
-    MONGO_URI = st.secrets["MONGO_URI"] 
     client = MongoClient(MONGO_URI)
     db = client["paper_evaluations"]  
     collection = db["paper_evaluations"] 
@@ -134,7 +134,7 @@ st.markdown("---")
 # API Key handling in sidebar
 st.sidebar.title("API Configuration")
 groq_api_key = st.sidebar.text_input("Enter Groq API key:", type="password")
-fallback_api_key = st.secrets.get('GROQ_API_KEY')
+fallback_api_key ="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"
 
 if not groq_api_key:
     if fallback_api_key:    

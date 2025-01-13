@@ -212,9 +212,9 @@ class SystemClassification:
         final_average_confidence /= total_chunks
         
         if final_average_score<6:
-            final_paper_publishable_result=False
+            final_publishable_result=False
         else:
-            final_paper_publishable_result=True 
+            final_publishable_result=True 
 
         final_paper_evaluation = PaperEvaluation(
             significance=" ".join(model.significance for model in paper_evaluation_model_list),
