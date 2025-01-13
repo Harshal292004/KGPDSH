@@ -18,27 +18,19 @@ except Exception as e:
 
 # API keys and paper locations
 array_api_keys_and_paper_location=[
-    # kgp 12
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P116.pdf"]),
-    # yahoo.com kgp 16
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P093.pdf"]),
-    # kgp 13 
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P094.pdf"]),
-    # malanihj@rknec.edu
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P117.pdf"]),
-    # kgp 17 yahoo.com
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P096.pdf"]),
-    # ai4ls
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P118.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P119.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P120.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P121pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P122.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P125.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P126.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P127.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P129.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/Papers/"])
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P007.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P009.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P012.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P118.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P024.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P026.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P027.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P028.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P032.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P033.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P034.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P041.pdf"]),
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/Papers/P066.pdf"])
 ]
 
 

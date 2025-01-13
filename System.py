@@ -211,7 +211,7 @@ class SystemClassification:
         final_average_score /= total_chunks
         final_average_confidence /= total_chunks
         
-        if final_paper_evaluation.score<6:
+        if final_average_score<6:
             final_paper_publishable_result=False
         else:
             final_paper_publishable_result=True 
