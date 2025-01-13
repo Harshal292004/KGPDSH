@@ -18,16 +18,18 @@ except Exception as e:
 
 # API keys and paper locations
 array_api_keys_and_paper_location=[
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P082.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P083.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P084.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P085.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P086.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P087.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P088.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P089.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P090.pdf"]),
-    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P091.pdf"]),
+    # kgp 12
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P076.pdf"]),
+    # malaniharshal95
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P083.pdf"]),
+    # kgp 13 
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P078.pdf"]),
+    # malanihj@rknec.edu
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P079.pdf"]),
+    # nptel
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P086.pdf"]),
+    # ai4ls
+    ("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",["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/P088.pdf"])
 ]
 
 
@@ -99,7 +101,7 @@ def process_papers(api_key, paper_locations):
                 output_model.score, output_model.major_strengths, output_model.major_weaknesses, 
                 output_model.detailed_feedback, 0, "", ""
             )
-            print("Evaluation saved successfully (not publishable).")
+            print(f"Evaluation saved successfully (not publishable) {paper_id}")
         else:
             conference_decision = conference_system.discuss_and_decide(report_of_paper=report_summary)
             if conference_decision:
@@ -110,7 +112,7 @@ def process_papers(api_key, paper_locations):
                     output_model.detailed_feedback, conference_decision["score"], 
                     conference_decision["justification"], conference_decision["conference"]
                 )
-                print("Evaluation saved successfully (publishable).")
+                print(f"Evaluation saved successfully (publishable).{paper_id}")
 def main():
     with ThreadPoolExecutor(max_workers=10) as executor: 
         futures = []

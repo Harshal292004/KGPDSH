@@ -86,17 +86,24 @@ def create_report_of_paper(output_model: PaperEvaluation) -> str:
                     output_model.major_strengths, output_model.major_weaknesses,
                     output_model.detailed_feedback])
 
-def save_evaluation(paper_id, publishable, conference, justification, conference_rationale):
+def save_evaluation(paper_id, publishable, justification, significance, methodology, presentation, confidence_score, score, major_strengths, major_weaknesses, detailed_feedback, conference_score, conference_rationale, conference):
     document = {
         "paper_id": paper_id,
         "publishable": publishable,
         "conference": conference,
         "justification": justification,
-        "conference_rationale": conference_rationale
+        "significance": significance,
+        "methodology": methodology,
+        "presentation": presentation,
+        "confidence_score": confidence_score,
+        "score": score,
+        "major_strengths": major_strengths,
+        "major_weaknesses": major_weaknesses,
+        "detailed_feedback": detailed_feedback,
+        "conference_score": conference_score,
+        "conference_rationale": conference_rationale,
     }
     collection.insert_one(document)
-    st.success("Evaluation saved successfully!")
-
 # Page configuration
 st.set_page_config(page_title="Paper Evaluation", page_icon="📜", layout="wide")
 
@@ -243,7 +250,12 @@ if uploaded_file:
                     
                     # Save initial evaluation
                     if not output_model.publishable:
-                        save_evaluation(paper_id, False, "", output_model.justification, "")
+                         save_evaluation(
+                            paper_id, False, output_model.justification, output_model.significance, 
+                            output_model.methodology, output_model.presentation, output_model.confidence_score, 
+                            output_model.score, output_model.major_strengths, output_model.major_weaknesses, 
+                            output_model.detailed_feedback, 0, "", ""
+                        )
                     
                     # Process conference recommendation if publishable
                     if output_model.publishable:
@@ -255,11 +267,11 @@ if uploaded_file:
                             
                             if conference_decision:
                                 save_evaluation(
-                                    paper_id,
-                                    True,
-                                    conference_decision["conference"],
-                                    output_model.justification,
-                                    conference_decision["justification"]
+                                    paper_id, True, output_model.justification, output_model.significance, 
+                                    output_model.methodology, output_model.presentation, output_model.confidence_score, 
+                                    output_model.score, output_model.major_strengths, output_model.major_weaknesses, 
+                                    output_model.detailed_feedback, conference_decision["score"], 
+                                    conference_decision["justification"], conference_decision["conference"]
                                 )
                                 
                                 st.header("Recommended Conference")
