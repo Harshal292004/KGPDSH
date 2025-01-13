@@ -5,8 +5,6 @@ from System import SystemSTORM, SystemClassification
 from ThemesAndContext import ThemesAndContext
 import time
 
-# MongoDB connection
-MONGO_URI = "mongodb+srv://malaniharshal95:1h2a3r4s@hactivate.dnymy.mongodb.net/?retryWrites=true&w=majority&appName=Hactivate"
 
 try:
     client = MongoClient(MONGO_URI)

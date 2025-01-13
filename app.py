@@ -193,8 +193,6 @@ if uploaded_file:
                 temp_file.write(uploaded_file.read())
                 temp_file_path = temp_file.name
                 
-                # Extract paper ID
-                paper_id = uploaded_file.name[:4]
                 
                 # Process paper
                 output_model = classification_system.classify_paper(path_to_pdf=temp_file_path)
@@ -251,7 +249,7 @@ if uploaded_file:
                     # Save initial evaluation
                     if not output_model.publishable:
                          save_evaluation(
-                            paper_id, False, output_model.justification, output_model.significance, 
+                            temp_file_path, False, output_model.justification, output_model.significance, 
                             output_model.methodology, output_model.presentation, output_model.confidence_score, 
                             output_model.score, output_model.major_strengths, output_model.major_weaknesses, 
                             output_model.detailed_feedback, 0, "", ""
@@ -267,7 +265,7 @@ if uploaded_file:
                             
                             if conference_decision:
                                 save_evaluation(
-                                    paper_id, True, output_model.justification, output_model.significance, 
+                                    temp_file_path, True, output_model.justification, output_model.significance, 
                                     output_model.methodology, output_model.presentation, output_model.confidence_score, 
                                     output_model.score, output_model.major_strengths, output_model.major_weaknesses, 
                                     output_model.detailed_feedback, conference_decision["score"], 
