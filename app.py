@@ -145,7 +145,7 @@ if not groq_api_key:
         st.sidebar.warning("Please enter your Groq API Key to proceed.")
 
 # Initialize LLM and systems
-llm = ModelManager.get_groq_llm(model_name="llama-3.1-8b-instant", api_key=groq_api_key)
+llm = ModelManager.get_ollama_llm(model_name="llama-3.1-8b-instant", api_key=groq_api_key)
 
 classification_system = SystemClassification(
     llm=llm,

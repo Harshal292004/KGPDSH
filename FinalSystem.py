@@ -19,6 +19,7 @@ except Exception as e:
 
 # API keys and paper locations
 array_api_keys_and_paper_location=[
+    ("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", ["/home/harshal/Desktop/KGPDSH/KGPDSH/papers/R011.pdf"])
 ]
 
 
@@ -54,7 +55,7 @@ def save_evaluation(paper_id, publishable, justification, significance, methodol
 
 def process_papers(api_key, paper_locations):
     print(f"Processing with API key: {api_key}")
-    llm = ModelManager.get_groq_llm(model_name="llama-3.1-8b-instant", api_key=api_key)
+    llm = ModelManager.get_ollama_llm(model_name="llama-3.1-8b-instant", api_key=api_key)
     classification_system = SystemClassification(llm=llm, debug=True)
     conference_system = SystemSTORM(
         llm=llm,

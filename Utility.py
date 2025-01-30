@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from langchain_community.vectorstores import PathwayVectorClient
 from langchain_groq import ChatGroq
+from langchain_ollama import ChatOllama
 
 
 
@@ -12,12 +13,18 @@ class ModelManager:
         """Initialize the ModelManager class."""
         
     @staticmethod
-    def get_groq_llm(model_name: str = "llama-3.3-70b-versatile",api_key: str = ""):
-        
-        llm_instance = ChatGroq(
-            model=model_name,
-            api_key=api_key
+    def get_ollama_llm(model_name: str = "deepseek-r1:8b",api_key: str = ""):
+        #llm_instance = ChatGroq(
+        #    model=model_name,
+        #    api_key=api_key
+        #)
+            
+        llm_instance = ChatOllama(
+        model = model_name,
+        temperature = 0.8,
+        num_predict = 256,
         )
+
         return llm_instance
 
 class PaperEvaluation(BaseModel):
